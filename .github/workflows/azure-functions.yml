@@ -1,4 +1,4 @@
-name: Deploy Azure Function (b-skrap, .NET 8 Isolated + Playwright on Linux)
+name: Deploy Azure Function (.NET 8 Isolated + Playwright on Linux)
 
 on:
   push:
