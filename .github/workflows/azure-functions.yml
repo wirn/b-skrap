@@ -39,16 +39,21 @@ jobs:
       # Installera Chromium + deps i publish-mappen (Playwright på Linux)
       - name: Install Playwright (Linux, .NET)
         working-directory: ./b-skrap
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ./publish/playwright-browsers
         run: |
-          # Låt webbläsarna hamna i publish/playwright-browsers så följer de med deployen
-          export PLAYWRIGHT_BROWSERS_PATH=./publish/playwright-browsers
+          echo "Listing build output:"
+          ls -la ./bin/Release/net8.0 || true
 
-          # Kör .NET-playwright-scriptet som skapas vid builden
           if [ -f "./bin/Release/net8.0/playwright.sh" ]; then
+            echo "Using generated playwright.sh"
             bash ./bin/Release/net8.0/playwright.sh install --with-deps chromium
           else
-            echo "playwright.sh not found. Is 'Microsoft.Playwright' referenced in the .csproj?"
-            exit 1
+            echo "playwright.sh not found, falling back to CLI"
+            dotnet tool install --global Microsoft.Playwright.CLI
+            export PATH="$PATH:$HOME/.dotnet/tools"
+            # Kör install i projektet (nuvarande katalog), men lägg browsers i publish/
+            playwright install --with-deps chromium -p "$(pwd)"
           fi
 
       - name: Deploy to Azure Functions (Linux)
