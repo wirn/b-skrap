@@ -18,7 +18,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # (valfritt) se struktur vid felsök
+      # (valfritt) lista filer för felsökning
       - name: List files
         run: |
           echo "Repo root:" && ls -la
@@ -42,31 +42,18 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: ./publish/playwright-browsers
         run: |
-          echo "Listing build output:"
-          ls -la ./bin/Release/net8.0 || true
-
+          # Försök använda generated script om det finns, annars CLI
           if [ -f "./bin/Release/net8.0/playwright.sh" ]; then
-            echo "Using generated playwright.sh"
             bash ./bin/Release/net8.0/playwright.sh install --with-deps chromium
           else
-            echo "playwright.sh not found, falling back to CLI"
             dotnet tool install --global Microsoft.Playwright.CLI
             export PATH="$PATH:$HOME/.dotnet/tools"
-            # Kör install i projektet (nuvarande katalog), men lägg browsers i publish/
-            playwright install --with-deps chromium -p "$(pwd)"
+            playwright install --with-deps chromium
           fi
 
-      # 🔎 Nytt: lista publish-innehåll så vi ser att playwright-browsers finns
+      # (valfritt) visa publish folder för debug
       - name: Inspect publish folder (verify Playwright browsers)
-        run: |
-          echo "Top level in publish:"
-          ls -la ./b-skrap/publish
-          echo ""
-          echo "Dirs inside publish (maxdepth=2):"
-          find ./b-skrap/publish -maxdepth 2 -type d -print
-          echo ""
-          echo "Size of browsers folder (if present):"
-          du -sh ./b-skrap/publish/playwright-browsers || true
+        run: ls -R ./b-skrap/publish || true
 
       - name: Deploy to Azure Functions (Linux)
         uses: azure/functions-action@v1
