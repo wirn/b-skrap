@@ -1,0 +1,42 @@
+name: Deploy Azure Functions (.NET 8 Isolated + Playwright)
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: windows-latest  # (Playwright funkar på Windows runner)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      # Säkerställ att Playwright-browser installeras i build-utdata
+      - name: Install Playwright browsers
+        shell: powershell
+        run: |
+          $script = Get-ChildItem -Recurse -Filter "playwright.ps1" | Where-Object { $_.FullName -match "bin\\Release\\net8\.0" } | Select-Object -First 1
+          if (-not $script) { throw "playwright.ps1 not found under bin/Release/net8.0" }
+          powershell -ExecutionPolicy Bypass -File $script.FullName install
+
+      - name: Publish (zip)
+        run: dotnet publish --configuration Release --output ./publish
+
+      # Deploy med publiceringsprofil
+      - name: Deploy to Azure Functions
+        uses: azure/functions-action@v1
+        with:
+          app-name: b-skrap
+          package: ./publish
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
