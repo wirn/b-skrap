@@ -18,12 +18,6 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # (valfritt) lista filer för felsökning
-      - name: List files
-        run: |
-          echo "Repo root:" && ls -la
-          echo "Project folder:" && ls -la b-skrap
-
       - name: Restore
         working-directory: ./b-skrap
         run: dotnet restore
@@ -36,28 +30,85 @@ jobs:
         working-directory: ./b-skrap
         run: dotnet publish --configuration Release --output ./publish
 
-      # Installera Chromium + deps i publish-mappen (Playwright på Linux)
       - name: Install Playwright (Linux, .NET)
         working-directory: ./b-skrap
         env:
           PLAYWRIGHT_BROWSERS_PATH: ./publish/playwright-browsers
+        shell: bash
         run: |
-          # Försök använda generated script om det finns, annars CLI
+          set -e
+          echo "Listing build output (bin/Release/net8.0):"
+          ls -la ./bin/Release/net8.0 || true
+
           if [ -f "./bin/Release/net8.0/playwright.sh" ]; then
+            echo "Using generated playwright.sh"
             bash ./bin/Release/net8.0/playwright.sh install --with-deps chromium
           else
+            echo "playwright.sh not found, using CLI fallback"
             dotnet tool install --global Microsoft.Playwright.CLI
             export PATH="$PATH:$HOME/.dotnet/tools"
-            playwright install --with-deps chromium
+            playwright install --with-deps chromium -p "$(pwd)"
           fi
 
-      # (valfritt) visa publish folder för debug
       - name: Inspect publish folder (verify Playwright browsers)
-        run: ls -R ./b-skrap/publish || true
+        shell: bash
+        run: |
+          set -e
+          ls -la ./b-skrap/publish || true
+          du -sh ./b-skrap/publish/playwright-browsers || true
 
-      - name: Deploy to Azure Functions (Linux)
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: b-skrap
-          package: ./b-skrap/publish
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_LINUX }}
+      - name: Create deployment zip
+        shell: bash
+        run: |
+          set -e
+          cd ./b-skrap/publish
+          zip -r ../package.zip .
+          cd -
+
+      - name: Deploy via Zip Deploy (Linux Consumption)
+        env:
+          APP_NAME: b-skrap
+          PUBLISH_PROFILE: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_LINUX }}
+        shell: bash
+        run: |
+          set -e
+
+          # Skriv publish profile till en tempfil (för parsern)
+          PP_XML="$(mktemp)"
+          printf "%s" "$PUBLISH_PROFILE" > "$PP_XML"
+
+          # Python: extrahera användare/lösen ur XML
+          python3 - "$PP_XML" <<'PY' > creds.out
+import sys, xml.etree.ElementTree as ET
+xml_path = sys.argv[1]
+root = ET.parse(xml_path).getroot()
+profiles = root.findall('.//publishProfile')
+pp = None
+for p in profiles:
+    m = (p.get('publishMethod') or '').lower()
+    if 'zip' in m or 'msdeploy' in m:
+        pp = p
+        break
+if pp is None and profiles:
+    pp = profiles[0]
+if pp is None:
+    print("") ; print("")
+else:
+    print(pp.get('userName') or "")
+    print(pp.get('userPWD') or "")
+PY
+
+          USER="$(sed -n '1p' creds.out)"
+          PASS="$(sed -n '2p' creds.out)"
+          if [ -z "$USER" ] || [ -z "$PASS" ]; then
+            echo "Could not extract credentials from publish profile"
+            exit 1
+          fi
+
+          echo "Uploading package via ZipDeploy to https://${APP_NAME}.azurewebsites.net/api/zipdeploy ..."
+          curl -sS -X POST \
+            -u "${USER}:${PASS}" \
+            -H "Content-Type: application/zip" \
+            --data-binary @"./b-skrap/package.zip" \
+            "https://${APP_NAME}.azurewebsites.net/api/zipdeploy" \
+            -w "\nHTTP %{http_code}\n"
