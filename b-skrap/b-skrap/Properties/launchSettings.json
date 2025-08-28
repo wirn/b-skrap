@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "b_skrap": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7092",
+      "launchBrowser": false
+    }
+  }
+}
