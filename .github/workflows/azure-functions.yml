@@ -33,17 +33,22 @@ jobs:
         working-directory: ./b-skrap
         run: dotnet build --configuration Release --no-restore
 
-      - name: Install Playwright browsers
-        working-directory: ./b-skrap
-        shell: powershell
-        run: |
-          $script = ".\bin\Release\net8.0\playwright.ps1"
-          if (!(Test-Path $script)) { throw "playwright.ps1 not found at $script" }
-          powershell -ExecutionPolicy Bypass -File $script install
-
-      - name: Publish (zip)
+      - name: Publish (Release)
         working-directory: ./b-skrap
         run: dotnet publish --configuration Release --output ./publish
+
+      - name: Install Playwright browsers into publish folder
+        working-directory: ./b-skrap/publish
+        shell: powershell
+        run: |
+          if (Test-Path ".\playwright.ps1") {
+            powershell -ExecutionPolicy Bypass -File .\playwright.ps1 install
+          } else {
+            Write-Host "playwright.ps1 not found in publish/. Falling back to global CLI..."
+            dotnet tool install --global Microsoft.Playwright.CLI
+            $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
+            playwright install chromium
+          }
 
       - name: Deploy to Azure Functions
         uses: azure/functions-action@v1
