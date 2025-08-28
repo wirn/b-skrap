@@ -17,10 +17,10 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore ./b-skrap/b-skrap.csproj
 
       - name: Build (Release)
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build ./b-skrap/b-skrap.csproj --configuration Release --no-restore
 
       # Säkerställ att Playwright-browser installeras i build-utdata
       - name: Install Playwright browsers
@@ -31,7 +31,7 @@ jobs:
           powershell -ExecutionPolicy Bypass -File $script.FullName install
 
       - name: Publish (zip)
-        run: dotnet publish --configuration Release --output ./publish
+        run: dotnet publish ./b-skrap/b-skrap.csproj --configuration Release --output ./publish
 
       # Deploy med publiceringsprofil
       - name: Deploy to Azure Functions

@@ -19,7 +19,7 @@ namespace b_skrap
 
         // Ändra till "0 */20 * * * *" för var 20:e minut när du är klar att köra i Azure.
         [Function("BrainvilleWatcher")]
-        public async Task Run([TimerTrigger("*/30 * * * * *")] TimerInfo _, FunctionContext ctx)
+        public async Task Run([TimerTrigger("0 */20 * * * *")] TimerInfo _, FunctionContext ctx)
         {
             var log = ctx.GetLogger("BrainvilleWatcher");
 
