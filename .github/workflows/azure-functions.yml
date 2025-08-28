@@ -1,29 +1,28 @@
-name: Deploy Azure Functions (.NET 8 Isolated + Playwright)
+name: Deploy Azure Function (b-skrap, .NET 8 Isolated + Playwright on Linux)
 
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      # (valfritt) se filstrukturen för att verifiera vägen
+      # (valfritt) se struktur vid felsök
       - name: List files
         run: |
-          echo "Repo root:"
-          dir
-          echo "Project folder:"
-          dir b-skrap
+          echo "Repo root:" && ls -la
+          echo "Project folder:" && ls -la b-skrap
 
       - name: Restore
         working-directory: ./b-skrap
@@ -33,26 +32,25 @@ jobs:
         working-directory: ./b-skrap
         run: dotnet build --configuration Release --no-restore
 
-      - name: Publish (Release)
+      - name: Publish
         working-directory: ./b-skrap
         run: dotnet publish --configuration Release --output ./publish
 
-      - name: Install Playwright browsers into publish folder
+      # Installera Chromium + deps i publish-mappen (Playwright på Linux)
+      - name: Install Playwright (Linux)
         working-directory: ./b-skrap/publish
-        shell: powershell
         run: |
-          if (Test-Path ".\playwright.ps1") {
-            powershell -ExecutionPolicy Bypass -File .\playwright.ps1 install
-          } else {
-            Write-Host "playwright.ps1 not found in publish/. Falling back to global CLI..."
+          if [ -f "./playwright.sh" ]; then
+            bash ./playwright.sh install --with-deps chromium
+          else
             dotnet tool install --global Microsoft.Playwright.CLI
-            $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
-            playwright install chromium
-          }
+            export PATH="$PATH:$HOME/.dotnet/tools"
+            playwright install --with-deps chromium
+          fi
 
-      - name: Deploy to Azure Functions
+      - name: Deploy to Azure Functions (Linux)
         uses: azure/functions-action@v1
         with:
-          app-name: b-skrap             # <— ditt Function App-namn
-          package: ./b-skrap/publish    # <— pekar på publish-mappen ovan
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+          app-name: b-skrap                 # <-- BYT TILL DITT FUNKTION-APPNAMN
+          package: ./b-skrap/publish
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_LINUX }}
